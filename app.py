@@ -5,14 +5,16 @@ from flask import Flask
 import threading
 import os
 
-TOKEN = os.environ.get("BOT_TOKEN")  # Store your bot token in Render Environment variables
+# -------------------------------
+# Environment & Bot Setup
+# -------------------------------
+TOKEN = os.environ.get("BOT_TOKEN")  # Store your bot token in Render environment variables
 CHANNEL_USERNAME = "@txtfilegenerator"
-
 bot = telebot.TeleBot(TOKEN)
 
-# ===============================
+# -------------------------------
 # Flask server to keep alive
-# ===============================
+# -------------------------------
 app = Flask(__name__)
 
 @app.route("/")
@@ -22,23 +24,27 @@ def home():
 def run_flask():
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
 
-# ===============================
+# -------------------------------
 # Helper Functions
-# ===============================
+# -------------------------------
 
 def is_member(user_id):
+    """Check if user joined required channel"""
     try:
         member = bot.get_chat_member(CHANNEL_USERNAME, user_id)
         return member.status in ["creator", "administrator", "member"]
     except:
         return False
 
+# Roblox lookup
 def get_roblox_user(username):
     try:
-        search = requests.get(f"https://users.roblox.com/v1/users/search?keyword={username}&limit=1").json()
-        if "data" not in search or len(search["data"]) == 0:
+        search = requests.get(f"https://users.roblox.com/v1/users/search?keyword={username}&limit=10").json()
+        users = search.get("data", [])
+        # Find exact username match
+        user = next((u for u in users if u["name"].lower() == username.lower()), None)
+        if not user:
             return None
-        user = search["data"][0]
         user_id = user["id"]
 
         details = requests.get(f"https://users.roblox.com/v1/users/{user_id}").json()
@@ -80,6 +86,7 @@ def get_roblox_user(username):
     except:
         return None
 
+# MLBB lookup
 def get_mlbb_user(player_id_or_name):
     url = f"https://api.merculet.io/mlbb/v1/player?nickname={player_id_or_name}"
     try:
@@ -107,9 +114,9 @@ def get_mlbb_user(player_id_or_name):
     except:
         return None
 
-# ===============================
+# -------------------------------
 # Telegram Bot Handlers
-# ===============================
+# -------------------------------
 
 @bot.message_handler(commands=["start"])
 def start(message):
@@ -207,14 +214,11 @@ def mlbb_lookup_step(message):
 """
     bot.send_message(message.chat.id, response)
 
-# ===============================
+# -------------------------------
 # Run Bot and Flask in Thread
-# ===============================
+# -------------------------------
 if __name__ == "__main__":
-    # Start Flask server in thread
     threading.Thread(target=run_flask).start()
     print("Flask server started to keep bot alive ✅")
-    
-    # Start Telegram bot
     print("Telegram bot running 24/7...")
     bot.infinity_polling()
